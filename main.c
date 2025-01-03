@@ -3,21 +3,120 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <termios.h>
 #include <unistd.h>
 
 #define ESC "\033"
 #define CLEAR_SCREEN ESC "[H" ESC "[J"
+#define array_len(x) sizeof(x) / sizeof(x[0])
 
 int set_non_canonical_mode(int fd);
 int reset_terminal_mode(int fd);
 int set_non_blocking(int fd);
 
-int main() {
+#define ROWS 10
+#define COLS 10
+
+typedef struct {
+  int x;
+  int y;
+} Vec2;
+
+typedef struct {
+  Vec2 cursor;
+  int rows;
+  int cols;
+  bool running;
+  bool should_quit;
+  char board[ROWS * COLS];
+} GameState;
+
+int mod(int a, int b) { return (a % b + b) % b; }
+
+void draw(GameState *game) {
   printf(CLEAR_SCREEN);
 
-  printf("type 'q' to exit ...");
-  fflush(stdout);
+  for (int i = 0; i < ROWS; i++) {
+    for (int j = 0; j < COLS; j++) {
+      if (i == game->cursor.y && j == game->cursor.x) {
+        printf("X");
+        continue;
+      }
+
+      printf("%c", game->board[j + game->cols * i]);
+    }
+    printf("\n");
+  }
+}
+
+void toggle_cell(GameState *game) {
+  int i = game->cursor.y;
+  int j = game->cursor.x;
+
+  game->board[j + game->cols * i] = '#';
+}
+
+void start_game(GameState *game) { game->running = true; }
+void stop_game(GameState *game) { game->running = false; }
+
+int count_neighbours(GameState *game, int row, int col) {
+  int cnt = 0;
+  for (int di = -1; di <= 1; di++) {
+    for (int dj = -1; dj <= 1; dj++) {
+      if (di == 0 && dj == 0)
+        continue;
+
+      int i = mod(row + di, game->rows);
+      int j = mod(col + dj, game->cols);
+      char neighbour = game->board[j + game->cols * i];
+      if (neighbour == '#') {
+        cnt++;
+      }
+    }
+  }
+  return cnt;
+}
+void evolve(GameState *game) {
+  char new_board[game->rows * game->cols + 1];
+  for (int i = 0; i < ROWS; i++) {
+    for (int j = 0; j < COLS; j++) {
+      int cnt = count_neighbours(game, i, j);
+
+      char curr = game->board[j + game->cols * i];
+      new_board[j + game->cols * i] = curr;
+
+      if (curr == '#' && (cnt < 2 || cnt > 3))
+        new_board[j + game->cols * i] = '.';
+
+      if (curr == '.' && cnt == 3)
+        new_board[j + game->cols * i] = '#';
+    }
+  }
+
+  memcpy(game->board, new_board, sizeof(new_board));
+}
+
+GameState initGame() {
+  GameState game = {
+      .rows = ROWS,
+      .cols = COLS,
+      .cursor = {0},
+      .running = false,
+      .should_quit = false,
+  };
+
+  for (int i = 0; i < ROWS; i++) {
+    for (int j = 0; j < COLS; j++) {
+      game.board[j + game.cols * i] = '.';
+    }
+  }
+
+  return game;
+}
+
+int main() {
+  GameState game = initGame();
 
   if (set_non_canonical_mode(STDIN_FILENO) != EXIT_SUCCESS) {
     perror("set_non_canonical_mode");
@@ -29,27 +128,65 @@ int main() {
     return EXIT_FAILURE;
   }
 
-  bool should_quit = false;
   uint timeout = 200000;
 
   char c;
-  while (!should_quit) {
+  while (!game.should_quit) {
     int bytes_read = read(STDIN_FILENO, &c, 1);
-    if (bytes_read == -1) {
-      if (errno == EAGAIN) {
-        usleep(timeout);
-        continue;
-      }
-
+    if (bytes_read == -1 && errno != EAGAIN) {
       perror("error stdin read");
       return EXIT_FAILURE;
-    } else if (bytes_read == 0) {
-      usleep(timeout);
     }
 
-    if (c == 'q') {
-      should_quit = true;
+    // draw_cursor(buffer, &curr_pos);
+    draw(&game);
+    fflush(stdout);
+    usleep(timeout);
+
+    // if (bytes_read == -1) {
+    //   if (errno == EAGAIN) {
+    //     usleep(timeout);
+    //     continue;
+    //   }
+    //
+    // } else if (bytes_read == 0) {
+    //   usleep(timeout);
+    // }
+
+    if (game.running) {
+      evolve(&game);
     }
+
+    switch (c) {
+    case 'q':
+      game.should_quit = true;
+      break;
+    case 'j':
+      game.cursor.y = mod(game.cursor.y + 1, game.rows);
+      break;
+    case 'k':
+      game.cursor.y = mod(game.cursor.y - 1, game.rows);
+      break;
+    case 'h':
+      game.cursor.x = mod(game.cursor.x - 1, game.cols);
+      break;
+    case 'l':
+      game.cursor.x = mod(game.cursor.x + 1, game.cols);
+      break;
+    case 'p':
+      start_game(&game);
+      break;
+    case 's':
+      stop_game(&game);
+      break;
+    case ' ':
+      toggle_cell(&game);
+      break;
+    default:
+      break;
+    }
+
+    c = '\0';
   }
 
   if (reset_terminal_mode(STDIN_FILENO) != EXIT_SUCCESS) {
