@@ -22,7 +22,9 @@ int main() {
     return EXIT_FAILURE;
   }
 
-  uint timeout = 100000;
+  uint timeout = 50000;
+  // timeout = 200000;
+  // timeout = 500000;
 
   char c;
   while (!game.should_quit) {
@@ -33,7 +35,6 @@ int main() {
     }
 
     draw(stdout, &game);
-    usleep(timeout);
 
     if (game.running) {
       evolve(&game);
@@ -55,13 +56,16 @@ int main() {
     case 'l':
       game.cursor.x = mod(game.cursor.x + 1, game.cols);
       break;
-    case 'p':
-      start_game(&game);
-      break;
-    case 's':
-      stop_game(&game);
-      break;
     case ' ':
+      if (game.running)
+        stop_game(&game);
+      else
+        start_game(&game);
+      break;
+    case 'R':
+      randomize(&game);
+      break;
+    case 't':
       toggle_cell(&game);
       break;
     default:
@@ -69,13 +73,12 @@ int main() {
     }
 
     c = '\0';
+
+    usleep(timeout);
   }
 
   if (reset_terminal_mode(STDIN_FILENO) != EXIT_SUCCESS) {
     perror("reset_terminal_mode");
     return EXIT_FAILURE;
   }
-
-  return EXIT_SUCCESS;
 }
-

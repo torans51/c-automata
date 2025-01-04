@@ -1,16 +1,19 @@
 #ifndef GAME_H__
 #define GAME_H__
 
-#include <string.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
-#define ROWS 40
-#define COLS 80
+#include "term.h"
+
+#define ROWS 50
+#define COLS 200
 #define DEAD 0
 #define ALIVE 1
 
-#ifdef GAME_IMPLEMENTATION
 typedef struct {
   int x;
   int y;
@@ -26,6 +29,18 @@ typedef struct {
   int next_board[ROWS * COLS];
 } GameState;
 
+int mod(int a, int b);
+GameState initGame();
+int get_cell_index(GameState *game, int i, int j);
+int get_cell(GameState *game, int i, int j);
+void toggle_cell(GameState *game);
+void start_game(GameState *game);
+void stop_game(GameState *game);
+void evolve(GameState *game);
+void randomize(GameState *game);
+void draw(FILE *stream, GameState *game);
+
+#ifdef GAME_IMPLEMENTATION
 int mod(int a, int b) { return (a % b + b) % b; }
 
 int get_cell_index(GameState *game, int i, int j) { return j + game->cols * i; }
@@ -42,14 +57,14 @@ void draw(FILE *stream, GameState *game) {
   for (int i = 0; i < ROWS; i++) {
     for (int j = 0; j < COLS; j++) {
       if (i == game->cursor.y && j == game->cursor.x) {
-        printf("X");
+        fputs("X", stream);
         continue;
       }
 
       int curr = get_cell(game, i, j);
-      printf("%c", curr == ALIVE ? '#' : '.');
+      fputs(curr == ALIVE ? "#" : ".", stream);
     }
-    printf("\n");
+    fputs("\n", stream);
   }
 
   fflush(stream);
@@ -102,6 +117,18 @@ void evolve(GameState *game) {
   memcpy(game->board, game->next_board, sizeof(game->next_board));
 }
 
+void randomize(GameState *game) {
+  srand(time(NULL));
+
+  for (int i = 0; i < game->rows; i++) {
+    for (int j = 0; j < game->cols; j++) {
+      int cell_index = get_cell_index(game, i, j);
+      int random = (rand() % 15) + 1;
+      game->board[cell_index] = random == 1 ? ALIVE : DEAD;
+    }
+  }
+}
+
 GameState initGame() {
   GameState game = {
       .rows = ROWS,
@@ -111,13 +138,10 @@ GameState initGame() {
       .should_quit = false,
   };
 
-  srand(time(NULL));
-
-  for (int i = 0; i < ROWS; i++) {
-    for (int j = 0; j < COLS; j++) {
+  for (int i = 0; i < game.rows; i++) {
+    for (int j = 0; j < game.cols; j++) {
       int cell_index = get_cell_index(&game, i, j);
-      int random = (rand() % 3) + 1;
-      game.board[cell_index] = random == 1 ? ALIVE : DEAD;
+      game.board[cell_index] = DEAD;
     }
   }
 
