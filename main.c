@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 #define ESC "\033"
@@ -15,8 +16,10 @@ int set_non_canonical_mode(int fd);
 int reset_terminal_mode(int fd);
 int set_non_blocking(int fd);
 
-#define ROWS 10
-#define COLS 10
+#define ROWS 40
+#define COLS 80
+#define DEAD 0
+#define ALIVE 1
 
 typedef struct {
   int x;
@@ -29,12 +32,21 @@ typedef struct {
   int cols;
   bool running;
   bool should_quit;
-  char board[ROWS * COLS];
+  int board[ROWS * COLS];
+  int next_board[ROWS * COLS];
 } GameState;
 
 int mod(int a, int b) { return (a % b + b) % b; }
 
-void draw(GameState *game) {
+int get_cell_index(GameState *game, int i, int j) { return j + game->cols * i; }
+
+int get_cell(GameState *game, int i, int j) {
+  i = mod(i, game->rows);
+  j = mod(j, game->cols);
+  return game->board[get_cell_index(game, i, j)];
+}
+
+void draw(FILE *stream, GameState *game) {
   printf(CLEAR_SCREEN);
 
   for (int i = 0; i < ROWS; i++) {
@@ -44,17 +56,22 @@ void draw(GameState *game) {
         continue;
       }
 
-      printf("%c", game->board[j + game->cols * i]);
+      int curr = get_cell(game, i, j);
+      printf("%c", curr == ALIVE ? '#' : '.');
     }
     printf("\n");
   }
+
+  fflush(stdout);
 }
 
 void toggle_cell(GameState *game) {
   int i = game->cursor.y;
   int j = game->cursor.x;
 
-  game->board[j + game->cols * i] = '#';
+  int curr = get_cell(game, i, j);
+  int cell_index = get_cell_index(game, i, j);
+  game->board[cell_index] = curr == ALIVE ? DEAD : ALIVE;
 }
 
 void start_game(GameState *game) { game->running = true; }
@@ -69,8 +86,8 @@ int count_neighbours(GameState *game, int row, int col) {
 
       int i = mod(row + di, game->rows);
       int j = mod(col + dj, game->cols);
-      char neighbour = game->board[j + game->cols * i];
-      if (neighbour == '#') {
+      int neighbour = get_cell(game, row + di, col + dj);
+      if (neighbour == ALIVE) {
         cnt++;
       }
     }
@@ -78,23 +95,23 @@ int count_neighbours(GameState *game, int row, int col) {
   return cnt;
 }
 void evolve(GameState *game) {
-  char new_board[game->rows * game->cols + 1];
   for (int i = 0; i < ROWS; i++) {
     for (int j = 0; j < COLS; j++) {
       int cnt = count_neighbours(game, i, j);
 
-      char curr = game->board[j + game->cols * i];
-      new_board[j + game->cols * i] = curr;
+      int curr = get_cell(game, i, j);
+      int cell_index = get_cell_index(game, i, j);
+      game->next_board[cell_index] = curr;
 
-      if (curr == '#' && (cnt < 2 || cnt > 3))
-        new_board[j + game->cols * i] = '.';
+      if (curr == ALIVE && (cnt < 2 || cnt > 3))
+        game->next_board[cell_index] = DEAD;
 
-      if (curr == '.' && cnt == 3)
-        new_board[j + game->cols * i] = '#';
+      if (curr == DEAD && cnt == 3)
+        game->next_board[cell_index] = ALIVE;
     }
   }
 
-  memcpy(game->board, new_board, sizeof(new_board));
+  memcpy(game->board, game->next_board, sizeof(game->next_board));
 }
 
 GameState initGame() {
@@ -106,11 +123,17 @@ GameState initGame() {
       .should_quit = false,
   };
 
+  srand(time(NULL));
+
   for (int i = 0; i < ROWS; i++) {
     for (int j = 0; j < COLS; j++) {
-      game.board[j + game.cols * i] = '.';
+      int cell_index = get_cell_index(&game, i, j);
+      int random = (rand() % 3) + 1;
+      game.board[cell_index] = random == 1 ? ALIVE : DEAD;
     }
   }
+
+  memcpy(game.next_board, game.board, sizeof(game.board));
 
   return game;
 }
@@ -128,7 +151,7 @@ int main() {
     return EXIT_FAILURE;
   }
 
-  uint timeout = 200000;
+  uint timeout = 100000;
 
   char c;
   while (!game.should_quit) {
@@ -138,20 +161,8 @@ int main() {
       return EXIT_FAILURE;
     }
 
-    // draw_cursor(buffer, &curr_pos);
-    draw(&game);
-    fflush(stdout);
+    draw(stdout, &game);
     usleep(timeout);
-
-    // if (bytes_read == -1) {
-    //   if (errno == EAGAIN) {
-    //     usleep(timeout);
-    //     continue;
-    //   }
-    //
-    // } else if (bytes_read == 0) {
-    //   usleep(timeout);
-    // }
 
     if (game.running) {
       evolve(&game);
