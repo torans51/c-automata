@@ -13,6 +13,8 @@
 #define COLS 200
 #define DEAD 0
 #define ALIVE 1
+#define REFRESH_RATE 60 // refresh rate for draw (fps)
+#define UPDATE_RATE 10  // evolve frame rate (fps)
 
 typedef struct {
   int x;
@@ -27,6 +29,8 @@ typedef struct {
   bool should_quit;
   int board[ROWS * COLS];
   int next_board[ROWS * COLS];
+  long prev_t;      // millisec
+  long draw_prev_t; // millisec
 } GameState;
 
 int mod(int a, int b);
@@ -36,9 +40,9 @@ int get_cell(GameState *game, int i, int j);
 void toggle_cell(GameState *game);
 void start_game(GameState *game);
 void stop_game(GameState *game);
-void evolve(GameState *game);
+void evolve(time_t t, GameState *game);
 void randomize(GameState *game);
-void draw(FILE *stream, GameState *game);
+void draw(time_t t, FILE *stream, GameState *game);
 
 #ifdef GAME_IMPLEMENTATION
 int mod(int a, int b) { return (a % b + b) % b; }
@@ -51,7 +55,16 @@ int get_cell(GameState *game, int i, int j) {
   return game->board[get_cell_index(game, i, j)];
 }
 
-void draw(FILE *stream, GameState *game) {
+void draw(time_t t, FILE *stream, GameState *game) {
+  if (game->draw_prev_t == 0) {
+    game->draw_prev_t = t;
+    return;
+  }
+
+  time_t dt = t - game->draw_prev_t;
+  if (REFRESH_RATE * dt <= 1000)
+    return;
+
   printf(CLEAR_SCREEN);
 
   for (int i = 0; i < ROWS; i++) {
@@ -68,6 +81,7 @@ void draw(FILE *stream, GameState *game) {
   }
 
   fflush(stream);
+  game->draw_prev_t = t;
 }
 
 void toggle_cell(GameState *game) {
@@ -97,7 +111,17 @@ int count_neighbours(GameState *game, int row, int col) {
   }
   return cnt;
 }
-void evolve(GameState *game) {
+
+void evolve(time_t t, GameState *game) {
+  if (game->prev_t == 0) {
+    game->prev_t = t;
+    return;
+  }
+
+  time_t dt = t - game->prev_t;
+  if (UPDATE_RATE * dt <= 1000)
+    return;
+
   for (int i = 0; i < ROWS; i++) {
     for (int j = 0; j < COLS; j++) {
       int cnt = count_neighbours(game, i, j);
@@ -115,6 +139,7 @@ void evolve(GameState *game) {
   }
 
   memcpy(game->board, game->next_board, sizeof(game->next_board));
+  game->prev_t = t;
 }
 
 void randomize(GameState *game) {
@@ -123,7 +148,7 @@ void randomize(GameState *game) {
   for (int i = 0; i < game->rows; i++) {
     for (int j = 0; j < game->cols; j++) {
       int cell_index = get_cell_index(game, i, j);
-      int random = (rand() % 15) + 1;
+      int random = (rand() % 10) + 1;
       game->board[cell_index] = random == 1 ? ALIVE : DEAD;
     }
   }
@@ -136,6 +161,8 @@ GameState initGame() {
       .cursor = {0},
       .running = false,
       .should_quit = false,
+      .prev_t = 0,
+      .draw_prev_t = 0,
   };
 
   for (int i = 0; i < game.rows; i++) {

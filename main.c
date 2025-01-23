@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #define TERM_IMPLEMENTATION
@@ -22,22 +23,24 @@ int main() {
     return EXIT_FAILURE;
   }
 
-  uint timeout = 50000;
-  // timeout = 200000;
-  // timeout = 500000;
+  // hard limit for timeout to avoid 100% cpu
+  uint timeout = 10000;
 
   char c;
+  struct timeval now;
   while (!game.should_quit) {
+    gettimeofday(&now, NULL);
+    long t = (long)(now.tv_sec) * 1000 + (now.tv_usec / 1000);
+
     int bytes_read = read(STDIN_FILENO, &c, 1);
     if (bytes_read == -1 && errno != EAGAIN) {
       perror("error stdin read");
       return EXIT_FAILURE;
     }
 
-    draw(stdout, &game);
-
+    draw(t, stdout, &game);
     if (game.running) {
-      evolve(&game);
+      evolve(t, &game);
     }
 
     switch (c) {
