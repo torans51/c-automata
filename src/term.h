@@ -65,6 +65,6 @@ int set_non_blocking(int fd) {
 
   return EXIT_SUCCESS;
 }
-#endif
+#endif // TERM_IMPLEMENTATION
 
-#endif
+#endif // TERM_H__

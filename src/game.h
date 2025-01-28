@@ -9,8 +9,8 @@
 
 #include "term.h"
 
-#define ROWS 50
-#define COLS 200
+#define ROWS 60
+#define COLS 300
 #define DEAD 0
 #define ALIVE 1
 #define REFRESH_RATE 60 // refresh rate for draw (fps)
@@ -176,6 +176,6 @@ GameState initGame() {
 
   return game;
 }
-#endif
+#endif // GAME_IMPLEMENTATION
 
-#endif
+#endif // GAME_H__
