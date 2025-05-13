@@ -47,17 +47,17 @@ int main() {
     case 'q':
       game.should_quit = true;
       break;
-    case 'j':
-      game.cursor.y = mod(game.cursor.y + 1, game.rows);
-      break;
     case 'k':
-      game.cursor.y = mod(game.cursor.y - 1, game.rows);
+      move(&game, UP);
+      break;
+    case 'j':
+      move(&game, DOWN);
       break;
     case 'h':
-      game.cursor.x = mod(game.cursor.x - 1, game.cols);
+      move(&game, LEFT);
       break;
     case 'l':
-      game.cursor.x = mod(game.cursor.x + 1, game.cols);
+      move(&game, RIGHT);
       break;
     case ' ':
       if (game.running)

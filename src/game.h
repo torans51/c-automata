@@ -21,6 +21,8 @@ typedef struct {
   int y;
 } Vec2;
 
+enum Direction { UP, DOWN, LEFT, RIGHT };
+
 typedef struct {
   Vec2 cursor;
   int rows;
@@ -53,6 +55,27 @@ int get_cell(GameState *game, int i, int j) {
   i = mod(i, game->rows);
   j = mod(j, game->cols);
   return game->board[get_cell_index(game, i, j)];
+}
+
+void move(GameState *game, enum Direction dir) {
+  int dx = 0;
+  int dy = 0;
+  switch (dir) {
+  case UP:
+    dy--;
+    break;
+  case DOWN:
+    dy++;
+    break;
+  case LEFT:
+    dx--;
+    break;
+  case RIGHT:
+    dx++;
+    break;
+  }
+  game->cursor.x = mod(game->cursor.x + dx, game->cols);
+  game->cursor.y = mod(game->cursor.y + dy, game->rows);
 }
 
 void draw(time_t t, FILE *stream, GameState *game) {
